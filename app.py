@@ -1,66 +1,83 @@
-import streamlit as os
 import streamlit as st
 import yt_dlp
 import os
-import glob
 
-st.set_page_config(page_title="YT Audio Downloader", page_icon="🎵", layout="centered")
+st.set_page_config(page_title="YT Downloader", page_icon="🎬", layout="centered")
 
-st.title("🎵 YouTube Audio Downloader")
-st.write("Pega el enlace de YouTube para extraer el audio en formato MP3.")
+st.title("🎬 YouTube Video & Audio Downloader")
+st.write("Pega el enlace de YouTube y selecciona el formato que prefieras.")
 
 # Campo de texto para la URL
-url = st.text_input("Enlace del video de YouTube:", placeholder="https://www.youtube.com/watch?v=...")
+url = st.text_input("Enlace de YouTube:", placeholder="https://www.youtube.com/watch?v=...")
+
+# Selector de formato
+formato = st.radio(
+    "¿Qué deseas descargar?",
+    ["🎵 Solo Audio (MP3)", "📺 Video Completo (MP4)"],
+    index=0,
+    horizontal=True
+)
 
 if url:
     if "youtube.com" in url or "youtu.be" in url:
-        st.info("Procesando el enlace... Espera un momento.")
+        st.info("Procesando el enlace... Esto puede tomar unos segundos.")
         
-        # Carpeta temporal para guardar la descarga antes de pasarla al usuario
         output_dir = "downloads"
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
             
-        # Configuración de yt-dlp
-        ydl_opts = {
-            'format': 'bestaudio/best',
-            'outtmpl': f'{output_dir}/%(title)s.%(ext)s',
-            'postprocessors': [{
-                'key': 'FFmpegExtractAudio',
-                'preferredcodec': 'mp3',
-                'preferredquality': '192',
-            }],
-            'quiet': True
-        }
+        # Configuración base de yt-dlp
+        if "🎵 Solo Audio" in formato:
+            ydl_opts = {
+                'format': 'bestaudio/best',
+                'outtmpl': f'{output_dir}/%(title)s.%(ext)s',
+                'postprocessors': [{
+                    'key': 'FFmpegExtractAudio',
+                    'preferredcodec': 'mp3',
+                    'preferredquality': '192',
+                }],
+                'quiet': True
+            }
+            extension_final = ".mp3"
+            mime_type = "audio/mp3"
+        else:
+            # Configuración para descargar Video en MP4 (combinando video y audio)
+            ydl_opts = {
+                'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
+                'outtmpl': f'{output_dir}/%(title)s.%(ext)s',
+                'quiet': True
+            }
+            extension_final = ".mp4"
+            mime_type = "video/mp4"
         
         try:
-            # Descargar y convertir en el servidor
+            # Descargar y procesar en el servidor de Streamlit
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(url, download=True)
                 filename = ydl.prepare_filename(info)
-                # Cambiar la extensión en el nombre del archivo esperado a mp3
-                mp3_filename = os.path.splitext(filename)[0] + ".mp3"
+                
+                # Asegurar el nombre correcto con la extensión final esperada
+                archivo_final = os.path.splitext(filename)[0] + extension_final
             
-            # Verificar que el archivo realmente existe
-            if os.path.exists(mp3_filename):
-                st.success(f"¡Listo! Audio procesado: **{info.get('title')}**")
+            # Verificar que el archivo se generó correctamente
+            if os.path.exists(archivo_final):
+                st.success(f"¡Procesado con éxito!: **{info.get('title')}**")
                 
-                # Leer el archivo en memoria para el botón de descarga de Streamlit
-                with open(mp3_filename, "rb") as file:
-                    audio_bytes = file.read()
+                # Leer el archivo para habilitar la descarga en el navegador del usuario
+                with open(archivo_final, "rb") as file:
+                    bytes_data = file.read()
                 
-                # Botón nativo de descarga de Streamlit
                 st.download_button(
-                    label="📥 Guardar MP3 en mi equipo",
-                    data=audio_bytes,
-                    file_name=os.path.basename(mp3_filename),
-                    mime="audio/mp3"
+                    label=f"📥 Guardar archivo {extension_final.upper()}",
+                    data=bytes_data,
+                    file_name=os.path.basename(archivo_final),
+                    mime=mime_type
                 )
                 
-                # Limpieza: Borrar el archivo del servidor local después de prepararlo
-                os.remove(mp3_filename)
+                # Limpiar el servidor borrando el archivo temporal
+                os.remove(archivo_final)
                 
         except Exception as e:
-            st.error(f"Ocurrió un error al procesar el video: {e}")
+            st.error(f"Ocurrió un error al procesar el archivo: {e}")
     else:
         st.error("Por favor, ingresa una URL válida de YouTube.")
